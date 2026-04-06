@@ -6,33 +6,25 @@ authors = [
     {name = "Brandon Creighton", email = "brandon@fulcradynamics.com"},
 ]
 readme = "README.md"
-packages = [{include = "fulcra_api"}]
-requires-python = ">= 3.9"
+requires-python = ">=3.9"
+dependencies = [
+    "pandas>=1.5,<3",
+    "pyarrow>=19.0.0",
+    "numpy>=2.0.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-pandas = "> 1.5, < 3"
-pyarrow = ">= 19.0.0"
-numpy = "^2.0.0"
-pytest = "^7.4.2"
-
+[project.optional-dependencies]
+test = ["pytest>=7.4"]
+dev  = ["ruff"]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocstrings[python]>=0.29.0",
+    "mkdocs-material>=9.4.5",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-
-[tool.poetry.group.docs.dependencies]
-mkdocs = "^1.5.3"
-sphinx = "^7.2.6"
-mkdocstrings = {extras = ["python"], version = "^0.29.0"}
-mkdocs-material = "^9.4.5"
-
-
-[tool.poetry.group.test.dependencies]
-pytest = "^7.4.2"
-
-
-[tool.poetry.group.dev.dependencies]
-black = "^23.9.1"
-
+[tool.hatch.build.targets.wheel]
+packages = ["fulcra_api"]
