@@ -1,7 +1,6 @@
 import os
 import base64
 import datetime
-import http.client
 import io
 import json
 import time
@@ -10,6 +9,7 @@ import webbrowser
 from typing import Dict, List, Optional, Tuple, Union
 
 import pandas as pd
+import requests
 
 try:
     from IPython.display import HTML, display
@@ -86,37 +86,19 @@ class FulcraAPI:
         if refresh_token:
             self.fulcra_cached_refresh_token = refresh_token
 
-    def _get_auth_connection(self, domain: str) -> http.client.HTTPSConnection:
-        """
-        Opens an https connection to the given server.
-
-        Params:
-            domain: The domain name to connect to
-
-        Returns:
-            an open `HTTPSConnection` to the server.
-        """
-        return http.client.HTTPSConnection(domain)
-
     def _request_device_code(
         self, domain: str, client_id: str, scope: str, audience: str
     ) -> Tuple[str, str, str]:
         """
         Requests a device code and complete verification URI from auth0.
         """
-        conn = self._get_auth_connection(domain)
-        body = urllib.parse.urlencode(
-            {"client_id": client_id, "audience": audience, "scope": scope}
+        response = requests.post(
+            f"https://{domain}/oauth/device/code",
+            data={"client_id": client_id, "audience": audience, "scope": scope},
         )
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        conn.request("POST", "/oauth/device/code", body, headers)
-        response = conn.getresponse()
-        if response.status != 200:
+        if response.status_code != 200:
             raise Exception(f"could not get device code: {response}")
-        bdata = response.read()
-        data = json.loads(bdata)
+        data = response.json()
         return (
             data["device_code"],
             data["verification_uri_complete"],
@@ -129,16 +111,13 @@ class FulcraAPI:
         """
         Internal helper to fetch tokens from the OIDC provider's /oauth/token endpoint.
         """
-        conn = self._get_auth_connection(self.oidc_domain)
-        body = urllib.parse.urlencode(payload)
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        conn.request("POST", "/oauth/token", body, headers)
-        response = conn.getresponse()
-        if response.status != 200:
+        response = requests.post(
+            f"https://{self.oidc_domain}/oauth/token",
+            data=payload,
+        )
+        if response.status_code != 200:
             return (None, None, None)
-        data = json.loads(response.read())
+        data = response.json()
         if "access_token" not in data:
             return (None, None, None)
 
@@ -389,16 +368,18 @@ class FulcraAPI:
         Returns:
             The raw response data (as bytes).  Raises an exception on failure.
         """
-        if self.fulcra_api_is_http:
-            conn = http.client.HTTPConnection(self.fulcra_api_domain, port=self.fulcra_api_port)
+        scheme = "http" if self.fulcra_api_is_http else "https"
+        if self.fulcra_api_port:
+            base_url = f"{scheme}://{self.fulcra_api_domain}:{self.fulcra_api_port}"
         else:
-            conn = http.client.HTTPSConnection(self.fulcra_api_domain, port=self.fulcra_api_port)
-        headers = {"Authorization": f"Bearer {access_token}"}
-        conn.request("GET", url_path, headers=headers)
-        response = conn.getresponse()
-        if response.status != 200:
-            raise Exception(f"request failed: {response.read().decode('utf-8')}")
-        return response.read()
+            base_url = f"{scheme}://{self.fulcra_api_domain}"
+        response = requests.get(
+            f"{base_url}{url_path}",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if response.status_code != 200:
+            raise Exception(f"request failed: {response.text}")
+        return response.content
 
     def fulcra_v1_api(
         self, access_token: str, data_class: str, data_type: str, params: dict = {}
