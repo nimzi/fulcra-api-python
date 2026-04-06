@@ -7,3 +7,5 @@ venv/
 dist/
 site/
 .env
+.venv/
+.fulcra_test_token.json
