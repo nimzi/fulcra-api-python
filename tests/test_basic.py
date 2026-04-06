@@ -8,6 +8,29 @@ from fulcra_api.core import FulcraAPI
 
 
 
+def test_get_device_auth_url(fulcra_client):
+    client = FulcraAPI()
+    uri, poll = client.get_device_auth_url()
+
+    assert uri.startswith("https://")
+    assert callable(poll)
+
+    # Poll against the real token endpoint — times out since nobody authenticates
+    result = poll(timeout_seconds=5.0, poll_interval=1.0)
+    assert result is False
+
+
+def test_get_device_auth_url_with_user(fulcra_client):
+    client = FulcraAPI()
+    uri, poll = client.get_device_auth_url()
+
+    print(f"\nPlease authenticate by visiting:\n{uri}\n")
+
+    result = poll(timeout_seconds=300.0, poll_interval=2.0)
+    assert result is True
+    assert client.get_cached_access_token() is not None
+
+
 def test_auth(fulcra_client):
     fuuid = uuid.UUID(fulcra_client.get_fulcra_userid())
     assert fuuid.variant == uuid.RFC_4122

@@ -42,6 +42,45 @@ def test_get_authorization_code_url_with_state(client: FulcraAPI):
     assert query_params["redirect_uri"] == [redirect_uri]
 
 
+@patch("fulcra_api.core.FulcraAPI._request_device_code")
+def test_get_device_auth_url_returns_uri_and_callable(mock_request_device_code, client: FulcraAPI):
+    mock_request_device_code.return_value = ("device_code_abc", "https://auth.example.com/activate?user_code=TEST-CODE", "TEST-CODE")
+
+    uri, poll = client.get_device_auth_url()
+
+    assert uri == "https://auth.example.com/activate?user_code=TEST-CODE"
+    assert callable(poll)
+
+
+@patch("fulcra_api.core.FulcraAPI.get_token")
+@patch("fulcra_api.core.FulcraAPI._request_device_code")
+def test_get_device_auth_url_poll_success(mock_request_device_code, mock_get_token, client: FulcraAPI):
+    mock_request_device_code.return_value = ("device_code_abc", "https://auth.example.com/activate?user_code=TEST-CODE", "TEST-CODE")
+    mock_expiration = datetime.datetime.now() + datetime.timedelta(hours=1)
+    mock_get_token.return_value = ("mock_access_token", mock_expiration)
+
+    uri, poll = client.get_device_auth_url()
+    result = poll(timeout_seconds=10.0, poll_interval=0.01)
+
+    assert result is True
+    assert client.fulcra_cached_access_token == "mock_access_token"
+    assert client.fulcra_cached_access_token_expiration == mock_expiration
+    assert client.fulcra_cached_refresh_token is None
+
+
+@patch("fulcra_api.core.FulcraAPI.get_token")
+@patch("fulcra_api.core.FulcraAPI._request_device_code")
+def test_get_device_auth_url_poll_timeout(mock_request_device_code, mock_get_token, client: FulcraAPI):
+    mock_request_device_code.return_value = ("device_code_abc", "https://auth.example.com/activate?user_code=TEST-CODE", "TEST-CODE")
+    mock_get_token.return_value = (None, None)
+
+    uri, poll = client.get_device_auth_url()
+    result = poll(timeout_seconds=0.1, poll_interval=0.05)
+
+    assert result is False
+    assert client.fulcra_cached_access_token is None
+
+
 @patch("fulcra_api.core.FulcraAPI._fetch_token_from_auth_server")
 def test_authorize_with_authorization_code_success(mock_fetch_token, client: FulcraAPI):
     code = "auth_code_123"

@@ -6,7 +6,7 @@ import json
 import time
 import urllib.parse
 import webbrowser
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 import requests
@@ -225,6 +225,43 @@ class FulcraAPI:
         self.fulcra_cached_access_token_expiration = None
         self.fulcra_cached_refresh_token = None
         raise Exception("Authorization failed.  Re-run these cells.")
+
+    def get_device_auth_url(self) -> Tuple[str, Callable]:
+        """
+        Returns the device authorization URL and a polling continuation.
+
+        Intended for agent and non-interactive use cases where the caller
+        needs the URL as a value rather than printed to stdout.
+
+        Returns:
+            A tuple of (verification_uri, poll) where calling poll() blocks
+            until the user authenticates or the timeout is reached.
+
+        Examples:
+            >>> uri, poll = fulcra.get_device_auth_url()
+            >>> print(f"Please visit: {uri}")
+            >>> if poll(timeout_seconds=300, poll_interval=2.0):
+            ...     print("Authorized.")
+            ... else:
+            ...     print("Timed out.")
+        """
+        device_code, uri, _ = self._request_device_code(
+            self.oidc_domain, self.oidc_client_id, self.oidc_scope, self.oidc_audience
+        )
+
+        def poll(timeout_seconds: float = 120.0, poll_interval: float = 2.0) -> bool:
+            stop_at = datetime.datetime.now() + datetime.timedelta(seconds=timeout_seconds)
+            while datetime.datetime.now() < stop_at:
+                time.sleep(poll_interval)
+                token, expiration = self.get_token(device_code)
+                if token is not None:
+                    self.fulcra_cached_access_token = token
+                    self.fulcra_cached_access_token_expiration = expiration
+                    self.fulcra_cached_refresh_token = None
+                    return True
+            return False
+
+        return uri, poll
 
     def get_authorization_code_url(
         self, redirect_uri: str, state: Optional[str] = None
